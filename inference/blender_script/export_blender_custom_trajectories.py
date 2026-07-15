@@ -160,46 +160,26 @@ if EXPORT_ELLIPSOIDS:
                     ], dtype=np.float32)
                     mean = center_blender.tolist()
 
-                    # Check if original covariance is stored as custom property
-                    if "eigenvectors" in ellipsoid_obj and "eigenvalues" in ellipsoid_obj:
-                        # Reconstruct covariance from stored parameters + user edits
-                        orig_eigenvectors = np.array(ellipsoid_obj["eigenvectors"], dtype=np.float32).reshape(3, 3)
-                        orig_eigenvalues = np.array(ellipsoid_obj["eigenvalues"], dtype=np.float32)
-                        
-                        # Get user's rotation and scale from object transform
-                        rot_quat = ellipsoid_obj.rotation_quaternion
-                        user_rotation = np.array(rot_quat.to_matrix(), dtype=np.float32)
-                        user_scale = np.array(ellipsoid_obj.scale, dtype=np.float32)
-                        
-                        # Apply user rotation to eigenvectors
-                        rotated_eigenvectors = user_rotation @ orig_eigenvectors
-                        
-                        # Apply user scale to eigenvalues (scale affects standard deviation, so square for variance)
-                        # Assuming uniform scale or taking average for non-uniform
-                        scale_factor = np.mean(user_scale) ** 2
-                        scaled_eigenvalues = orig_eigenvalues * scale_factor
-                        
-                        # Reconstruct covariance: V @ D @ V.T
-                        covariance_blender = rotated_eigenvectors @ np.diag(scaled_eigenvalues) @ rotated_eigenvectors.T
-                        cov = covariance_blender.tolist()
-                    else:
-                        # Fallback: compute from mesh vertices directly
-                        # Get all vertex positions in world space
-                        vertices_world = []
-                        for v in mesh.vertices:
-                            v_world = world_matrix @ v.co
-                            vertices_world.append([v_world.x, v_world.y, v_world.z])
-                        vertices_world = np.array(vertices_world, dtype=np.float32)
-                        
-                        # Compute covariance from vertex distribution
-                        # For an ellipsoid created from unit sphere, cov = (1/scale_factor^2) * sample_cov
-                        vertices_centered = vertices_world - center_blender
-                        sample_cov = np.cov(vertices_centered.T)
-                        
-                        # Adjust for ellipsoid scale factor (unit sphere has variance ~1/3 in each axis)
-                        ellipsoid_scale_factor = 2.0
-                        covariance_blender = sample_cov / (ellipsoid_scale_factor ** 2) * 3
-                        cov = covariance_blender.tolist()
+                    # Always compute covariance from current mesh vertices in world space
+                    # This ensures all user edits are captured (Edit Mode changes, Object Mode transforms, constraints)
+                    vertices_world = []
+                    for v in mesh.vertices:
+                        v_world = world_matrix @ v.co
+                        vertices_world.append([v_world.x, v_world.y, v_world.z])
+                    vertices_world = np.array(vertices_world, dtype=np.float32)
+                    
+                    # Compute covariance from vertex distribution
+                    # For an ellipsoid created from unit sphere with scale_factor, we need to adjust
+                    vertices_centered = vertices_world - center_blender
+                    sample_cov = np.cov(vertices_centered.T)
+                    
+                    # The ellipsoid mesh is created by scaling a unit icosphere
+                    # For a unit sphere, variance along each axis ≈ 1/3
+                    # So the sample covariance needs to be adjusted to get the Gaussian covariance
+                    # covariance = sample_cov / (scale_factor^2) * 3, where scale_factor=2.0 in make_ellipsoid_mesh
+                    ellipsoid_scale_factor = 2.0
+                    covariance_blender = sample_cov / (ellipsoid_scale_factor ** 2) * 3
+                    cov = covariance_blender.tolist()
                     
                     # Keep parameters in Blender coordinate system
                     # (rendering_4D_control_maps.py expects Blender coordinates since point cloud is also in Blender coords)
