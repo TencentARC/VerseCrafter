@@ -34,6 +34,20 @@
 
 ✨ A controllable video world model with explicit 4D geometric control over camera and multi-object motion.
 
+## 📚 Table of Contents
+
+- [News](#-news)
+- [TODO](#-todo)
+- [TL;DR](#tldr)
+- [Installation](#installation)
+- [Download Checkpoints](#download-checkpoints)
+- [Usage](#usage)
+- [VerseControl4D Build (Data Processing)](#versecontrol4d-build-data-processing)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
+- [Star History](#star-history)
+- [Citation](#citation)
+
 ## 🔥 News
 
 - **[Feb 21, 2026]** 🎉 VerseCrafter is accepted to **CVPR 2026**!
@@ -43,7 +57,7 @@
 
 - [x] Inference code
 - [ ] Training code
-- [ ] Data processing code
+- [x] Data processing code
 
 ## TL;DR
 
@@ -308,6 +322,68 @@ torchrun --nproc-per-node=8 inference/versecrafter_inference.py \
 ```
 
 ![Generated Video](asset/generated_video_0.gif)
+
+## VerseControl4D Build (Data Processing)
+
+We provide integrated filtering/rendering entry scripts under `data_processing/`:
+
+- `build_versecontrol4d_spatialvid.sh`
+- `build_versecontrol4d_sekai.sh`
+
+Download datasets first:
+
+- **Sekai**: [Lixsp11/Sekai](https://huggingface.co/datasets/Lixsp11/Sekai)
+- **SpatialVID-HQ**: [FelixYuan/SpatialVID-HQ](https://huggingface.co/datasets/FelixYuan/SpatialVID-HQ)
+
+Then follow the same step order as the build scripts:
+
+### Sekai flow (`build_versecontrol4d_sekai.sh`)
+
+- **Step 0**: Split metadata by `crowdDensity` (`scattered`/`moderate`).
+- **Step 1 (existing code)**: Use [sekai-codebase](https://github.com/Lixsp11/sekai-codebase) for clip extraction.
+- **Step 2**: Filter clips with `2_filter_sekai_with_grounded_sam2.py`.
+- **Step 3 (existing code)**: Use [TAPIP3D](https://github.com/zbw001/TAPIP3D) to predict depth, camera pose, and export `*_depth_pose.npz` files.
+- **Step 4**: Render control maps with `render_video_pipeline_sekai.py`.
+
+### SpatialVID-HQ flow (`build_versecontrol4d_spatialvid.sh`)
+
+- **Step 0**: Split metadata by `crowdDensity` (`Sparse`/`Moderate`).
+- **Step 1 (existing code)**: Run clip extraction with `1_run_scenedetect.py`.
+- **Step 2**: Filter clips with `2_filter_spatialvid_with_grounded_sam2.py`.
+- **Step 3 (existing code)**: Use [TAPIP3D](https://github.com/zbw001/TAPIP3D) to predict depth, camera pose, and export `*_depth_pose.npz` files.
+- **Step 4**: Render control maps with `render_video_pipeline_spatialvid.py`.
+
+The scripts assume these artifacts already exist at expected paths
+(for Sekai, clips under `vstreams_scattered` / `vstreams_moderate`; for SpatialVID under
+`SpatialVid/HQ`), and Grounded-SAM-2 defaults to `third_party/Grounded-SAM-2` via `GSAM2_HOME`.
+
+System dependency:
+
+- `ffmpeg` and `ffprobe` must be available in `PATH`.
+
+### Quick Start
+
+```bash
+# 1) make sure submodules are initialized
+git submodule update --init --recursive
+
+# 2) after dataset download + external preprocessing, enter data_processing
+cd data_processing
+
+# 3) SpatialVID pipeline
+SPATIALVID_ROOT=/path/to/SpatialVID-HQ \
+bash build_versecontrol4d_spatialvid.sh
+
+# 4) Sekai pipeline
+SEKAI_ROOT=/path/to/sekai-codebase \
+bash build_versecontrol4d_sekai.sh
+```
+
+Optional environment variables:
+
+- `GSAM2_HOME`: Grounded-SAM-2 root path (default: `third_party/Grounded-SAM-2`)
+
+`build_versecontrol4d_sekai.sh` now renders scattered and moderate subsets separately.
 
 ## Acknowledgements
 
