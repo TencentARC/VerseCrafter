@@ -42,7 +42,9 @@
 - [Installation](#installation)
 - [Download Checkpoints](#download-checkpoints)
 - [Usage](#usage)
-- [VerseControl4D Build (Data Processing)](#versecontrol4d-build-data-processing)
+- [Building the VerseControl4D Dataset](#building-the-versecontrol4d-dataset)
+- [Training](#training)
+- [Batch Inference](#batch-inference)
 - [Acknowledgements](#acknowledgements)
 - [License](#license)
 - [Star History](#star-history)
@@ -50,13 +52,15 @@
 
 ## 🔥 News
 
+- **[Jul 20, 2026]** 🚀 We release the [training code](train) for VerseCrafter!
+- **[Jul 19, 2026]** 🚀 We release the [data processing code](data_processing) for building VerseControl4D!
 - **[Feb 21, 2026]** 🎉 VerseCrafter is accepted to **CVPR 2026**!
 - **[Jan 9, 2026]** 🚀 VerseCrafter is released! We publish the [arXiv preprint](https://arxiv.org/pdf/2601.05138), inference code, and model checkpoints.
 
 ## ✅ TODO
 
 - [x] Inference code
-- [ ] Training code
+- [x] Training code
 - [x] Data processing code
 
 ## TL;DR
@@ -115,7 +119,7 @@
    ```bash
    pip install --upgrade huggingface_hub
    mkdir -p model
-   hf download --local-dir model/VerseCrafter sxzheng/VerseCrafter
+   hf download --local-dir model/VerseCrafter TencentARC/VerseCrafter
    hf download --local-dir model/Wan2.1-T2V-14B Wan-AI/Wan2.1-T2V-14B
    ```
 2. **Download Grounded-SAM-2 and Grounding DINO checkpoints:**
@@ -237,7 +241,7 @@ python inference/fit_3D_gaussian.py \
     --output_dir $OUTPUT_DIR/fitted_3D_gaussian
 ```
 
-The following are input image and its corresponding results:
+The following are the input image and its corresponding results:
 
 | Input Image | Depth Map | Segmentation Mask | 3D Gaussian |
 |-------------|-----------|-------------------|-------------|
@@ -297,7 +301,7 @@ python inference/rendering_4D_control_maps.py \
     --output_dir $OUTPUT_DIR/camera_object_0/rendering_4D_maps
 ```
 
-The following are 4D control maps rendered from the this steps:
+The following are the 4D control maps rendered from this step:
 
 | Background RGB | Background Depth | 3D Gaussian RGB | 3D Gaussian Depth | Merged Mask |
 |:--------------:|:--------------:|:--------------:|:--------------:|:--------------:|
@@ -306,7 +310,7 @@ The following are 4D control maps rendered from the this steps:
 
 ##### Step 6: VerseCrafter Inference
 
-Generate the generated video.
+Generate the final video.
 
 ```bash
 torchrun --nproc-per-node=8 inference/versecrafter_inference.py \
@@ -323,9 +327,9 @@ torchrun --nproc-per-node=8 inference/versecrafter_inference.py \
 
 ![Generated Video](asset/generated_video_0.gif)
 
-## VerseControl4D Build (Data Processing)
+## Building the VerseControl4D Dataset
 
-We provide integrated filtering/rendering entry scripts under `data_processing/`:
+We provide integrated filtering/rendering entry scripts under `data_processing/` that turn raw Sekai / SpatialVID-HQ videos into VerseControl4D clips and 4D control maps:
 
 - `build_versecontrol4d_spatialvid.sh`
 - `build_versecontrol4d_sekai.sh`
@@ -335,31 +339,7 @@ Download datasets first:
 - **Sekai**: [Lixsp11/Sekai](https://huggingface.co/datasets/Lixsp11/Sekai)
 - **SpatialVID-HQ**: [FelixYuan/SpatialVID-HQ](https://huggingface.co/datasets/FelixYuan/SpatialVID-HQ)
 
-Then follow the same step order as the build scripts:
-
-### Sekai flow (`build_versecontrol4d_sekai.sh`)
-
-- **Step 0**: Split metadata by `crowdDensity` (`scattered`/`moderate`).
-- **Step 1 (existing code)**: Use [sekai-codebase](https://github.com/Lixsp11/sekai-codebase) for clip extraction.
-- **Step 2**: Filter clips with `2_filter_sekai_with_grounded_sam2.py`.
-- **Step 3 (existing code)**: Use [TAPIP3D](https://github.com/zbw001/TAPIP3D) to predict depth, camera pose, and export `*_depth_pose.npz` files.
-- **Step 4**: Render control maps with `render_video_pipeline_sekai.py`.
-
-### SpatialVID-HQ flow (`build_versecontrol4d_spatialvid.sh`)
-
-- **Step 0**: Split metadata by `crowdDensity` (`Sparse`/`Moderate`).
-- **Step 1 (existing code)**: Run clip extraction with `1_run_scenedetect.py`.
-- **Step 2**: Filter clips with `2_filter_spatialvid_with_grounded_sam2.py`.
-- **Step 3 (existing code)**: Use [TAPIP3D](https://github.com/zbw001/TAPIP3D) to predict depth, camera pose, and export `*_depth_pose.npz` files.
-- **Step 4**: Render control maps with `render_video_pipeline_spatialvid.py`.
-
-The scripts assume these artifacts already exist at expected paths
-(for Sekai, clips under `vstreams_scattered` / `vstreams_moderate`; for SpatialVID under
-`SpatialVid/HQ`), and Grounded-SAM-2 defaults to `third_party/Grounded-SAM-2` via `GSAM2_HOME`.
-
-System dependency:
-
-- `ffmpeg` and `ffprobe` must be available in `PATH`.
+System dependency: `ffmpeg` and `ffprobe` must be available in `PATH`.
 
 ### Quick Start
 
@@ -383,7 +363,127 @@ Optional environment variables:
 
 - `GSAM2_HOME`: Grounded-SAM-2 root path (default: `third_party/Grounded-SAM-2`)
 
-`build_versecontrol4d_sekai.sh` now renders scattered and moderate subsets separately.
+`build_versecontrol4d_sekai.sh` renders the scattered and moderate subsets separately.
+
+### Pipeline Steps
+
+Each build script runs the same step order. Steps marked *(existing code)* rely on external repositories.
+
+#### Sekai flow (`build_versecontrol4d_sekai.sh`)
+
+- **Step 0**: Split metadata by `crowdDensity` (`scattered`/`moderate`).
+- **Step 1 (existing code)**: Use [sekai-codebase](https://github.com/Lixsp11/sekai-codebase) for clip extraction.
+- **Step 2**: Filter clips with `2_filter_sekai_with_grounded_sam2.py`.
+- **Step 3 (existing code)**: Use [TAPIP3D](https://github.com/zbw001/TAPIP3D) to predict depth, camera pose, and export `*_depth_pose.npz` files.
+- **Step 4**: Render control maps with `render_video_pipeline_sekai.py`.
+
+#### SpatialVID-HQ flow (`build_versecontrol4d_spatialvid.sh`)
+
+- **Step 0**: Split metadata by `crowdDensity` (`Sparse`/`Moderate`).
+- **Step 1 (existing code)**: Run clip extraction with `1_run_scenedetect.py`.
+- **Step 2**: Filter clips with `2_filter_spatialvid_with_grounded_sam2.py`.
+- **Step 3 (existing code)**: Use [TAPIP3D](https://github.com/zbw001/TAPIP3D) to predict depth, camera pose, and export `*_depth_pose.npz` files.
+- **Step 4**: Render control maps with `render_video_pipeline_spatialvid.py`.
+
+The scripts assume these artifacts already exist at expected paths (for Sekai, clips under `vstreams_scattered` / `vstreams_moderate`; for SpatialVID under `SpatialVid/HQ`), and Grounded-SAM-2 defaults to `third_party/Grounded-SAM-2` via `GSAM2_HOME`.
+
+### Output layout
+
+Step 4 renders **5 control/mask maps** per clip: `background_RGB.mp4`, `background_depth.mp4`, `3D_gaussian_RGB.mp4`, `3D_gaussian_depth.mp4`, `merged_mask.mp4`. Together with the source clips, they are consumed by both [Training](#training) and [Batch Inference](#batch-inference).
+
+- Sekai clips: `vstreams_{scattered|moderate}_clip/<video_id>/<clip_stem>.mp4`
+- Sekai maps: `vstreams_{scattered|moderate}_clip_annotation/<video_id>/<clip_stem>/*.mp4`
+- SpatialVID clips: `SpatialVid/HQ/{Sparse|Moderate}_clip/<clip_stem>.mp4`
+- SpatialVID maps: `clip_annotation/<clip_stem>/*.mp4`
+
+## Training
+
+We train VerseCrafter on VerseControl4D by attaching a geometry-aware **GeoAdapter** to a **frozen** [Wan2.1-T2V-14B](https://huggingface.co/Wan-AI/Wan2.1-T2V-14B) backbone: the VAE, text encoder, and the Wan2.1 diffusion backbone are all frozen, and only the GeoAdapter modules (`--trainable_modules=geoada`) are trained. The training entry point is:
+
+- `train/train.py`: training script
+- `train/train.sh`: multi-node launch script (Accelerate + DeepSpeed ZeRO-2)
+
+### Prerequisites
+
+1. Finish the data build/rendering first (see [Building the VerseControl4D Dataset](#building-the-versecontrol4d-dataset)).
+2. Prepare a **merged training CSV** (this repo does not ship training CSV files) with at least:
+   - `clipPath`
+   - `crowdDensity`
+   - `qwen_prompt` or `prompt`
+3. Download the base model to `model/Wan2.1-T2V-14B` (the same checkpoint fetched in [Download Checkpoints](#download-checkpoints)).
+
+### Expected dataset layout
+
+`--train_data_dir` (default `dataset`) is the common root that holds both sub-datasets, each providing the source clips and the [5 control/mask maps](#output-layout):
+
+- Sekai clips: `sekai_train_10k/vstreams_{scattered|moderate}_clip/<video_id>/<clip_stem>.mp4`
+- Sekai maps: `sekai_train_10k/vstreams_{scattered|moderate}_clip_annotation/<video_id>/<clip_stem>/*.mp4`
+- SpatialVID maps: `spatialvid/clip_annotation/<clip_stem>/*.mp4`
+
+### Run Training
+
+Edit the placeholders at the top of `train/train.sh` (Python environment, `MASTER_ADDR`, dataset/model paths), then run from the repository root:
+
+```bash
+conda activate versecrafter
+bash train/train.sh
+```
+
+For multi-node training, set these environment variables per machine before launching (or edit them in `train/train.sh`):
+
+```bash
+export MASTER_ADDR=<rank-0 machine IP>   # shared across all machines
+export MASTER_PORT=29500
+export WORLD_SIZE=<number of machines>
+export NUM_PROCESS=<WORLD_SIZE * GPUs per node>
+export RANK=<rank of this machine, 0 .. WORLD_SIZE-1>
+bash train/train.sh
+```
+
+Checkpoints and validation samples are written to `--output_dir` (default `results/exp_ours_14B`). Training auto-resumes from the latest checkpoint (`--resume_from_checkpoint="latest"`) and restarts on crash.
+
+## Batch Inference
+
+We provide release-ready batch inference scripts under `batch_inference/`:
+
+- `batch_inference/predict_v2v_control_sekai_batch.py`
+- `batch_inference/predict_v2v_control_spatialvid_batch.py`
+- `batch_inference/run_batch_inference_sekai.sh`
+- `batch_inference/run_batch_inference_spatialvid.sh`
+
+These scripts run VerseCrafter over prepared VerseControl4D clips and export:
+
+- `{clip_stem}_generated.mp4`: generated result
+- `{clip_stem}_comparison.mp4`: 3x3 comparison grid (controls + mask + generated + GT)
+
+> This section produces generated videos and qualitative comparison grids only; it does not compute quantitative metrics.
+
+### Prerequisites
+
+1. Finish the data build/rendering first (see [Building the VerseControl4D Dataset](#building-the-versecontrol4d-dataset)); the scripts read clips and maps from its [output layout](#output-layout).
+2. Prepare your own **test split CSV** (this repo does not ship test CSV files).
+3. Ensure your CSV includes:
+   - `clipPath`
+   - `crowdDensity`
+   - `qwen_prompt` or `prompt`
+
+### Run Sekai Batch Inference
+
+Update placeholders in `batch_inference/run_batch_inference_sekai.sh` and run:
+
+```bash
+conda activate versecrafter
+bash batch_inference/run_batch_inference_sekai.sh 0
+```
+
+### Run SpatialVID Batch Inference
+
+Update placeholders in `batch_inference/run_batch_inference_spatialvid.sh` and run:
+
+```bash
+conda activate versecrafter
+bash batch_inference/run_batch_inference_spatialvid.sh 0
+```
 
 ## Acknowledgements
 
