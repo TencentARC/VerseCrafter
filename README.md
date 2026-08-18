@@ -495,7 +495,7 @@ This project is released under the [VerseCrafter License](LICENSE). It is intend
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=TencentARC/VerseCrafter&type=date&legend=top-left)](https://www.star-history.com/#TencentARC/VerseCrafter&type=date&legend=top-left)
+[![Star History Chart](https://star-history.dera.page/svg?repos=TencentARC/VerseCrafter&type=date&legend=top-left)](https://star-history.dera.page/#TencentARC/VerseCrafter&type=date&legend=top-left)
 
 ## Citation
 
